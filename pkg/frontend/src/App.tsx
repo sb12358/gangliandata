@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import Plot from "react-plotly.js"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AlertTriangle, Download, Filter, LineChart, RefreshCcw, Search } from "lucide-react"
+import Plotly from "plotly.js-dist-min"
 
 import { MultiSelect } from "@/components/multi-select"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
@@ -71,6 +69,8 @@ interface FiltersState {
 
 const DEFAULT_TABLE_CN = "全量"
 const DEFAULT_LIMIT = 5000
+
+const EMPTY_ROWS: QueryRow[] = []
 
 const initialFilters: FiltersState = {
   indicatorName: "全部",
@@ -149,8 +149,22 @@ export default function App() {
   const [manualYRange, setManualYRange] = useState(false)
   const [trendYMin, setTrendYMin] = useState("")
   const [trendYMax, setTrendYMax] = useState("")
+  const [plotLoadError, setPlotLoadError] = useState("")
+  const plotContainerRef = useRef<HTMLDivElement | null>(null)
 
-  const rows = result?.rows ?? []
+  const rows = result?.rows ?? EMPTY_ROWS
+
+  const indicatorNameOptions = useMemo(() => {
+    return (meta?.indicator_names ?? [])
+      .map((item) => String(item ?? "").trim())
+      .filter((item) => item.length > 0)
+  }, [meta?.indicator_names])
+
+  const indicatorCodeOptions = useMemo(() => {
+    return (meta?.indicator_codes ?? [])
+      .map((item) => String(item ?? "").trim())
+      .filter((item) => item.length > 0)
+  }, [meta?.indicator_codes])
 
   const applyMetaDefaults = useCallback((m: FilterMeta): FiltersState => {
     return {
@@ -267,11 +281,15 @@ export default function App() {
 
   useEffect(() => {
     if (indicatorNamesInRows.length === 0) {
-      setTrendIndicators([])
+      setTrendIndicators((prev) => (prev.length === 0 ? prev : []))
     } else {
       setTrendIndicators((prev) => {
         const kept = prev.filter((item) => indicatorNamesInRows.includes(item))
-        return kept.length > 0 ? kept : [indicatorNamesInRows[0]]
+        const next = kept.length > 0 ? kept : [indicatorNamesInRows[0]]
+        if (prev.length === next.length && prev.every((item, idx) => item === next[idx])) {
+          return prev
+        }
+        return next
       })
     }
 
@@ -343,7 +361,7 @@ export default function App() {
 
     return {
       autosize: true,
-      height: 460,
+      height: 620,
       margin: { l: 60, r: 24, t: 24, b: 60 },
       paper_bgcolor: "rgba(255,255,255,0)",
       plot_bgcolor: "rgba(255,255,255,0.85)",
@@ -374,6 +392,50 @@ export default function App() {
     }
   }, [manualYRange, trendEnd, trendStart, trendYMax, trendYMin])
 
+  useEffect(() => {
+    let cancelled = false
+
+    const renderPlot = async () => {
+      const el = plotContainerRef.current
+      if (!el) {
+        return
+      }
+
+      try {
+        await Plotly.react(el, chartData as never[], chartLayout as never, {
+          responsive: true,
+          displaylogo: false,
+          scrollZoom: true,
+          modeBarButtonsToRemove: ["lasso2d", "select2d", "toImage"],
+        } as never)
+
+        if (!cancelled) {
+          setPlotLoadError("")
+        }
+      } catch (err) {
+        console.error("Plotly render failed:", err)
+        if (!cancelled) {
+          setPlotLoadError(err instanceof Error ? err.message : "趋势图渲染失败")
+        }
+      }
+    }
+
+    void renderPlot()
+
+    return () => {
+      cancelled = true
+    }
+  }, [chartData, chartLayout])
+
+  useEffect(() => {
+    return () => {
+      const el = plotContainerRef.current
+      if (el) {
+        Plotly.purge(el)
+      }
+    }
+  }, [])
+
   const handleQueryClick = async () => {
     await runQuery(selectedTableCn, filters)
   }
@@ -385,6 +447,23 @@ export default function App() {
     const next = applyMetaDefaults(meta)
     setFilters(next)
     await runQuery(selectedTableCn, next)
+  }
+
+  const handleResetXAxis = () => {
+    const minDate = dateValuesInRows[0] ?? ""
+    const maxDate = dateValuesInRows[dateValuesInRows.length - 1] ?? ""
+    setTrendStart(minDate)
+    setTrendEnd(maxDate)
+
+    const el = plotContainerRef.current
+    if (!el) {
+      return
+    }
+    if (minDate && maxDate) {
+      void Plotly.relayout(el, { "xaxis.range": [minDate, maxDate] } as never)
+    } else {
+      void Plotly.relayout(el, { "xaxis.autorange": true } as never)
+    }
   }
 
   const handleExportClick = async () => {
@@ -416,9 +495,7 @@ export default function App() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">期货数据分析平台</h1>
-          <p className="text-sm text-muted-foreground">真正 React + shadcn/ui 版本</p>
         </div>
-        <Badge variant="secondary">http://localhost:8502</Badge>
       </div>
 
       {error ? (
@@ -435,7 +512,6 @@ export default function App() {
               <CardTitle className="flex items-center gap-2">
                 <Filter className="h-5 w-5" /> 查询条件
               </CardTitle>
-              <CardDescription>基于当前已选择的数据表进行筛选</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -450,7 +526,7 @@ export default function App() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="全部">全部</SelectItem>
-                    {(meta?.indicator_names ?? []).map((item) => (
+                    {indicatorNameOptions.map((item) => (
                       <SelectItem key={item} value={item}>
                         {item}
                       </SelectItem>
@@ -471,7 +547,7 @@ export default function App() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="全部">全部</SelectItem>
-                    {(meta?.indicator_codes ?? []).map((item) => (
+                    {indicatorCodeOptions.map((item) => (
                       <SelectItem key={item} value={item}>
                         {item}
                       </SelectItem>
@@ -555,49 +631,27 @@ export default function App() {
         <main className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>数据表展示</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select value={selectedTableCn} onValueChange={setSelectedTableCn} disabled={isLoadingTables || tables.length === 0}>
-                <SelectTrigger className="max-w-xl">
-                  <SelectValue placeholder="选择数据表" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tables.map((table) => (
-                    <SelectItem key={table.cn} value={table.cn}>
-                      {table.cn} ({table.en})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex-row items-start justify-between gap-3">
-              <div>
-                <CardTitle>查询结果</CardTitle>
-                <CardDescription>
-                  {result
-                    ? `共 ${result.total_count.toLocaleString("zh-CN")} 条，当前显示 ${result.row_count.toLocaleString("zh-CN")} 条`
-                    : "请先选择数据表"}
-                </CardDescription>
-              </div>
-              <Button variant="outline" onClick={() => void handleExportClick()} disabled={!result || result.row_count === 0}>
-                <Download className="h-4 w-4" /> 导出 CSV
-              </Button>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle>数据表</CardTitle>
-              <CardDescription>
-                字段: indicator code / indicator name / value / unit / frequency / datetime
-              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[420px] rounded-md border">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <Select value={selectedTableCn} onValueChange={setSelectedTableCn} disabled={isLoadingTables || tables.length === 0}>
+                  <SelectTrigger className="w-full max-w-xl">
+                    <SelectValue placeholder="选择数据表" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tables.map((table) => (
+                      <SelectItem key={table.cn} value={table.cn}>
+                        {table.cn}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={() => void handleExportClick()} disabled={!result || result.row_count === 0}>
+                  <Download className="h-4 w-4" /> 导出 CSV
+                </Button>
+              </div>
+              <div className="h-[560px] min-h-[420px] max-h-[82vh] resize-y overflow-auto rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -630,7 +684,15 @@ export default function App() {
                     )}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
+              <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2">
+                <p className="text-sm text-muted-foreground">
+                  {result
+                    ? `共 ${result.total_count.toLocaleString("zh-CN")} 条，当前显示 ${result.row_count.toLocaleString("zh-CN")} 条`
+                    : "请先选择数据表"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">可拖拽数据表区域右下角，向下拉长显示更多行。</p>
+              </div>
             </CardContent>
           </Card>
 
@@ -713,7 +775,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-5">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-6">
                 <div className="flex items-center gap-2 xl:col-span-2">
                   <Checkbox
                     id="manual-y"
@@ -745,6 +807,9 @@ export default function App() {
                   value={trendYMax}
                   onChange={(event) => setTrendYMax(event.target.value)}
                 />
+                <Button variant="secondary" onClick={handleResetXAxis}>
+                  还原 X 轴
+                </Button>
                 <Button
                   variant="secondary"
                   onClick={() => {
@@ -758,17 +823,10 @@ export default function App() {
               </div>
 
               <div className="rounded-xl border bg-white/80 p-2">
-                <Plot
-                  data={chartData as never[]}
-                  layout={chartLayout as never}
-                  config={{
-                    responsive: true,
-                    displaylogo: false,
-                    scrollZoom: true,
-                    modeBarButtonsToRemove: ["lasso2d", "select2d", "toImage"],
-                  }}
-                  style={{ width: "100%" }}
-                />
+                <div ref={plotContainerRef} className="h-[620px] w-full" />
+                {plotLoadError ? (
+                  <div className="mt-2 text-sm text-amber-700">趋势图组件加载失败: {plotLoadError}</div>
+                ) : null}
               </div>
             </CardContent>
           </Card>

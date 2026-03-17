@@ -42,23 +42,23 @@ stopped="0"
 if [[ -f "$PID_FILE" ]]; then
   pid_from_file="$(cat "$PID_FILE" 2>/dev/null || true)"
   if stop_pid "$pid_from_file"; then
-    echo "已停止服务 (PID: $pid_from_file, URL: http://localhost:$PORT)"
+    echo "已停止服务 (PID: $pid_from_file, URL: http://localhost:${PORT})"
     stopped="1"
   fi
   rm -f "$PID_FILE"
 fi
 
-for pid in $(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true); do
+for pid in $(lsof -tiTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null || true); do
   if stop_pid "$pid"; then
-    echo "已停止服务 (PID: $pid, URL: http://localhost:$PORT)"
+    echo "已停止服务 (PID: $pid, URL: http://localhost:${PORT})"
     stopped="1"
   else
-    echo "发现端口 $PORT 进程 PID=$pid，但不是本项目服务，已跳过。"
+    echo "发现端口 ${PORT} 进程 PID=$pid，但不是本项目服务，已跳过。"
   fi
 done
 
 if [[ "$stopped" == "0" ]]; then
-  echo "未发现本项目运行中的服务（http://localhost:$PORT）。"
+  echo "未发现本项目运行中的服务（http://localhost:${PORT}）。"
 else
   echo "停止完成。"
 fi

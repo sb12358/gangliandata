@@ -14,11 +14,21 @@ is_target_cmd() {
   [[ "$cmd" == *"$PROJECT_DIR"* && "$cmd" == *"uvicorn"* && "$cmd" == *"backend.main:app"* ]]
 }
 
+is_target_pid_listening() {
+  local target_pid="$1"
+  for pid in $(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true); do
+    if [[ "$pid" == "$target_pid" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 if [[ -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   if [[ -n "${old_pid:-}" ]] && kill -0 "$old_pid" 2>/dev/null; then
     old_cmd="$(ps -p "$old_pid" -o command= 2>/dev/null || true)"
-    if is_target_cmd "$old_cmd"; then
+    if is_target_cmd "$old_cmd" && is_target_pid_listening "$old_pid"; then
       echo "服务已在运行 (PID: $old_pid, URL: http://localhost:$PORT)"
       exit 0
     fi
@@ -55,7 +65,14 @@ if [[ -f ".env" ]]; then
   set +a
 fi
 
-nohup uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" >>"$LOG_FILE" 2>&1 &
+if command -v setsid >/dev/null 2>&1; then
+  nohup setsid uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" </dev/null >>"$LOG_FILE" 2>&1 &
+else
+  nohup uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" </dev/null >>"$LOG_FILE" 2>&1 &
+fi
+
+launcher_pid="$!"
+disown "$launcher_pid" 2>/dev/null || true
 
 run_pid=""
 for _ in {1..60}; do
@@ -69,13 +86,20 @@ for _ in {1..60}; do
   sleep 0.5
 done
 
-if [[ -n "$run_pid" ]]; then
-  echo "$run_pid" > "$PID_FILE"
-  echo "启动成功: http://localhost:$PORT"
-  echo "PID: $run_pid"
-  echo "日志: $LOG_FILE"
-else
+if [[ -z "$run_pid" ]]; then
   echo "启动失败，端口 $PORT 未监听。请检查日志: $LOG_FILE"
   rm -f "$PID_FILE"
   exit 1
 fi
+
+sleep 1
+if ! kill -0 "$run_pid" 2>/dev/null || ! is_target_pid_listening "$run_pid"; then
+  echo "启动失败：服务启动后立即退出。请检查日志: $LOG_FILE"
+  rm -f "$PID_FILE"
+  exit 1
+fi
+
+echo "$run_pid" > "$PID_FILE"
+echo "启动成功: http://localhost:$PORT"
+echo "PID: $run_pid"
+echo "日志: $LOG_FILE"

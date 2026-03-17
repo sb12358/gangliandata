@@ -7,7 +7,42 @@
     <title>frontend</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot-fallback" style="padding: 24px; font-family: sans-serif; color: #1f2937">
+        页面初始化中...
+      </div>
+    </div>
+
+    <script>
+      ;(function () {
+        var root = document.getElementById("root")
+        var fallback = document.getElementById("boot-fallback")
+
+        window.addEventListener("error", function (event) {
+          if (!root) return
+          root.innerHTML =
+            '<div style="padding:24px;font-family:sans-serif"><h2 style="margin:0 0 8px">页面加载失败</h2><pre style="white-space:pre-wrap;background:#fff4e5;border:1px solid #f5c26b;border-radius:8px;padding:12px">' +
+            (event && event.message ? event.message : "未知脚本错误") +
+            "</pre></div>"
+        })
+
+        window.addEventListener("unhandledrejection", function (event) {
+          if (!root) return
+          var reason = event && event.reason ? String(event.reason) : "未知 Promise 错误"
+          root.innerHTML =
+            '<div style="padding:24px;font-family:sans-serif"><h2 style="margin:0 0 8px">页面加载失败</h2><pre style="white-space:pre-wrap;background:#fff4e5;border:1px solid #f5c26b;border-radius:8px;padding:12px">' +
+            reason +
+            "</pre></div>"
+        })
+
+        setTimeout(function () {
+          if (fallback && fallback.parentElement) {
+            fallback.textContent = "页面正在加载，请稍候..."
+          }
+        }, 3000)
+      })()
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
