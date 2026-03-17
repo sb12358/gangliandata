@@ -1,0 +1,5 @@
+pkg/.venv/
+pkg/.run_logs/
+pkg/.uvicorn_8502.pid
+pkg/.streamlit_8502.pid
+pkg/nohup.out

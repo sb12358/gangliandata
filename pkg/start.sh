@@ -8,13 +8,20 @@ if [ ! -d ".venv" ]; then
 fi
 
 source .venv/bin/activate
-
 python -m pip install --upgrade pip >/dev/null
 python -m pip install -r requirements.txt
 
+if [ ! -d "frontend/node_modules" ]; then
+  (cd frontend && npm install)
+fi
+
+(cd frontend && npm run build)
+
+if [[ -f ".env" ]]; then
+  set -a
+  source .env
+  set +a
+fi
+
 APP_PORT="${APP_PORT:-8502}"
-streamlit run app.py \
-  --server.port "${APP_PORT}" \
-  --server.address 0.0.0.0 \
-  --server.headless true \
-  --browser.gatherUsageStats false
+exec uvicorn backend.main:app --host 0.0.0.0 --port "${APP_PORT}"

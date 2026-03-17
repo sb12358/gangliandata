@@ -1,0 +1,53 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 34 52% 97%;
+    --foreground: 221 39% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 221 39% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 221 39% 18%;
+    --primary: 213 92% 40%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 200 39% 94%;
+    --secondary-foreground: 221 39% 18%;
+    --muted: 210 28% 95%;
+    --muted-foreground: 220 18% 44%;
+    --accent: 35 88% 92%;
+    --accent-foreground: 27 49% 24%;
+    --border: 210 28% 86%;
+    --input: 210 28% 90%;
+    --ring: 213 92% 40%;
+    --radius: 0.9rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground font-sans antialiased;
+    background-image: radial-gradient(circle at 0% 0%, #fff9ed 0%, transparent 36%),
+      radial-gradient(circle at 100% 0%, #eaf3ff 0%, transparent 42%),
+      linear-gradient(140deg, #fffefb 0%, #f7fafc 38%, #f2f6ff 100%);
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border bg-card shadow-glass backdrop-blur-sm;
+  }
+
+  .stat-card {
+    @apply rounded-xl border bg-white p-4 transition hover:shadow-md;
+  }
+}
