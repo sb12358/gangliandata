@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="/Users/shaobin/Desktop/code/pkg"
+PROJECT_DIR="/Users/shaobin/Desktop/code/gangliandata/pkg"
 PORT="8502"
-PID_FILE="$PROJECT_DIR/.streamlit_8502.pid"
+PID_FILE="$PROJECT_DIR/.uvicorn_8502.pid"
 
 is_target_cmd() {
   local cmd="$1"
-  [[ "$cmd" == *"$PROJECT_DIR"* && "$cmd" == *"streamlit"* && "$cmd" == *"app.py"* ]]
+  [[ "$cmd" == *"$PROJECT_DIR"* && "$cmd" == *"uvicorn"* && "$cmd" == *"backend.main:app"* ]]
 }
 
 stop_pid() {
@@ -26,12 +26,13 @@ stop_pid() {
   fi
 
   kill "$pid" 2>/dev/null || true
-  for _ in {1..20}; do
+  for _ in {1..30}; do
     if ! kill -0 "$pid" 2>/dev/null; then
       return 0
     fi
     sleep 0.2
   done
+
   kill -9 "$pid" 2>/dev/null || true
   ! kill -0 "$pid" 2>/dev/null
 }
@@ -47,7 +48,6 @@ if [[ -f "$PID_FILE" ]]; then
   rm -f "$PID_FILE"
 fi
 
-# 兜底：只处理监听 8502 且命令匹配本项目的进程
 for pid in $(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true); do
   if stop_pid "$pid"; then
     echo "已停止服务 (PID: $pid, URL: http://localhost:$PORT)"

@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="/Users/shaobin/Desktop/code/pkg"
+PROJECT_DIR="/Users/shaobin/Desktop/code/gangliandata/pkg"
 PORT="8502"
-PID_FILE="$PROJECT_DIR/.streamlit_8502.pid"
+PID_FILE="$PROJECT_DIR/.uvicorn_8502.pid"
 LOG_DIR="$PROJECT_DIR/.run_logs"
-LOG_FILE="$LOG_DIR/streamlit_8502.log"
+LOG_FILE="$LOG_DIR/uvicorn_8502.log"
 
 mkdir -p "$LOG_DIR"
 
 is_target_cmd() {
   local cmd="$1"
-  [[ "$cmd" == *"$PROJECT_DIR"* && "$cmd" == *"streamlit"* && "$cmd" == *"app.py"* ]]
+  [[ "$cmd" == *"$PROJECT_DIR"* && "$cmd" == *"uvicorn"* && "$cmd" == *"backend.main:app"* ]]
 }
 
 if [[ -f "$PID_FILE" ]]; then
@@ -43,17 +43,22 @@ source .venv/bin/activate
 python -m pip install --upgrade pip >/dev/null
 python -m pip install -r requirements.txt >/dev/null
 
-nohup streamlit run app.py \
-  --server.port "$PORT" \
-  --server.address 0.0.0.0 \
-  --server.headless true \
-  --browser.gatherUsageStats false \
-  >>"$LOG_FILE" 2>&1 &
+if [[ ! -d "frontend/node_modules" ]]; then
+  (cd frontend && npm install >/dev/null)
+fi
 
-new_pid="$!"
+(cd frontend && npm run build >/dev/null)
+
+if [[ -f ".env" ]]; then
+  set -a
+  source .env
+  set +a
+fi
+
+nohup uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" >>"$LOG_FILE" 2>&1 &
 
 run_pid=""
-for _ in {1..30}; do
+for _ in {1..60}; do
   for pid in $(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true); do
     cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
     if is_target_cmd "$cmd"; then
