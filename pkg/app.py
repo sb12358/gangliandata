@@ -355,108 +355,100 @@ def apply_page_style():
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=IBM+Plex+Sans+SC:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
         :root {
-            --bg-a: #f4fbff;
-            --bg-b: #fefaf2;
-            --text: #142032;
-            --muted: #6b7a90;
+            --bg-a: #f8fafc;
+            --bg-b: #f1f5f9;
+            --text: #0f172a;
+            --muted: #64748b;
             --card: #ffffff;
-            --line: #dce6f4;
-            --accent: #0f7ae5;
-            --accent-2: #17a2a4;
+            --line: #e2e8f0;
+            --accent: #0f172a;
+            --accent-2: #334155;
         }
 
         html, body, [class*="css"] {
-            font-family: 'Manrope', 'IBM Plex Sans SC', sans-serif;
+            font-family: 'Inter', sans-serif;
             color: var(--text);
         }
 
         .stApp {
-            background:
-              radial-gradient(circle at 12% 12%, #dbf2ff 0%, transparent 42%),
-              radial-gradient(circle at 88% 8%, #ffeec8 0%, transparent 38%),
-              linear-gradient(125deg, var(--bg-a), var(--bg-b));
+            background: linear-gradient(180deg, var(--bg-a), var(--bg-b));
         }
 
         .metric-card {
-            background: linear-gradient(160deg, #ffffff 0%, #f8fbff 100%);
+            background: #ffffff;
             border: 1px solid var(--line);
-            border-radius: 14px;
+            border-radius: 8px;
             padding: 12px 14px;
-            box-shadow: 0 6px 14px rgba(20, 32, 50, 0.05);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
             min-height: 88px;
         }
 
         .metric-title {
             color: var(--muted);
-            font-size: 0.82rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            font-size: 0.78rem;
+            font-weight: 600;
             margin-bottom: 8px;
         }
 
         .metric-value {
             color: var(--text);
-            font-size: 1.2rem;
-            font-weight: 800;
+            font-size: 1.12rem;
+            font-weight: 700;
             line-height: 1.2;
         }
 
         .result-bar {
-            background: linear-gradient(120deg, #ffffff, #f5fbff);
-            border: 1px solid #d7e7f8;
-            border-radius: 14px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
             padding: 12px 14px;
             margin: 6px 0 12px;
-            box-shadow: 0 6px 14px rgba(20, 32, 50, 0.04);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
         }
 
         .result-count {
             margin: 0;
-            font-size: 1.02rem;
+            font-size: 1rem;
             font-weight: 700;
-            color: #1a2a40;
+            color: #0f172a;
         }
 
         .result-sub {
             margin: 6px 0 0;
-            font-size: 0.88rem;
-            color: #5f7390;
+            font-size: 0.85rem;
+            color: #64748b;
         }
 
         [data-testid="stSidebar"] {
-            background:
-              radial-gradient(circle at 15% 10%, #d9efff 0%, transparent 35%),
-              linear-gradient(180deg, #eef7ff 0%, #ecf7f3 100%);
-            border-right: 1px solid #d4e5f8;
+            background: #f8fafc;
+            border-right: 1px solid #e2e8f0;
         }
 
         [data-testid="stSidebar"] .stMarkdown h2 {
-            font-size: 1.05rem;
-            font-weight: 800;
-            letter-spacing: 0.2px;
-            color: #173054;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #0f172a;
         }
 
         .sidebar-note {
-            background: rgba(255, 255, 255, 0.78);
-            border: 1px solid #d8e7f7;
-            border-radius: 10px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
             padding: 8px 10px;
-            color: #4f6788;
+            color: #64748b;
             font-size: 0.84rem;
             margin-bottom: 8px;
         }
 
         [data-testid="stSidebar"] [data-testid="stForm"] {
-            background: rgba(255, 255, 255, 0.75);
-            border: 1px solid #d7e5f6;
-            border-radius: 14px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
             padding: 10px 10px 8px;
-            box-shadow: 0 5px 12px rgba(20, 32, 50, 0.04);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
         }
 
         [data-testid="stSidebar"] .stSelectbox > div,
@@ -468,12 +460,12 @@ def apply_page_style():
 
         [data-testid="stSidebar"] .stButton > button,
         [data-testid="stSidebar"] button[kind="primary"] {
-            border-radius: 10px;
-            font-weight: 700;
+            border-radius: 8px;
+            font-weight: 600;
         }
 
         [data-testid="stMarkdownContainer"] h3 {
-            color: #173459;
+            color: #0f172a;
         }
         </style>
         """,
