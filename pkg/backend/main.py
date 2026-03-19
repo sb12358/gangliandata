@@ -176,6 +176,8 @@ def build_where_clause(col_map: Dict[str, str], payload) -> Tuple[str, List[obje
 
     indicator_code = to_text(getattr(payload, "indicator_code", "")).strip()
     indicator_name = to_text(getattr(payload, "indicator_name", "")).strip()
+    indicator_code_like = to_text(getattr(payload, "indicator_code_like", "")).strip()
+    indicator_name_like = to_text(getattr(payload, "indicator_name_like", "")).strip()
 
     if indicator_code and indicator_code != "全部":
         where_clauses.append(f"CAST({quote_identifier(col_map['indicator_code'])} AS CHAR) = %s")
@@ -184,6 +186,14 @@ def build_where_clause(col_map: Dict[str, str], payload) -> Tuple[str, List[obje
     if indicator_name and indicator_name != "全部":
         where_clauses.append(f"CAST({quote_identifier(col_map['indicator_name'])} AS CHAR) = %s")
         params.append(indicator_name)
+
+    if indicator_code_like:
+        where_clauses.append(f"CAST({quote_identifier(col_map['indicator_code'])} AS CHAR) LIKE %s")
+        params.append(f"%{indicator_code_like}%")
+
+    if indicator_name_like:
+        where_clauses.append(f"CAST({quote_identifier(col_map['indicator_name'])} AS CHAR) LIKE %s")
+        params.append(f"%{indicator_name_like}%")
 
     date_start = to_text(getattr(payload, "date_start", "")).strip()
     date_end = to_text(getattr(payload, "date_end", "")).strip()
@@ -255,6 +265,8 @@ class QueryPayload(BaseModel):
     table_cn: str = Field(..., description="中文表名")
     indicator_name: Optional[str] = None
     indicator_code: Optional[str] = None
+    indicator_name_like: Optional[str] = None
+    indicator_code_like: Optional[str] = None
     date_start: Optional[str] = None
     date_end: Optional[str] = None
     enable_value_filter: bool = False

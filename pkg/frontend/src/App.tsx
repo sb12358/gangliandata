@@ -60,6 +60,8 @@ interface QueryResponse {
 interface FiltersState {
   indicatorName: string
   indicatorCode: string
+  indicatorNameLike: string
+  indicatorCodeLike: string
   dateStart: string
   dateEnd: string
   enableValueFilter: boolean
@@ -75,6 +77,8 @@ const EMPTY_ROWS: QueryRow[] = []
 const initialFilters: FiltersState = {
   indicatorName: "全部",
   indicatorCode: "全部",
+  indicatorNameLike: "",
+  indicatorCodeLike: "",
   dateStart: "",
   dateEnd: "",
   enableValueFilter: false,
@@ -103,6 +107,8 @@ function buildPayload(tableCn: string, filters: FiltersState) {
     table_cn: tableCn,
     indicator_name: filters.indicatorName === "全部" ? "" : filters.indicatorName,
     indicator_code: filters.indicatorCode === "全部" ? "" : filters.indicatorCode,
+    indicator_name_like: filters.indicatorNameLike.trim(),
+    indicator_code_like: filters.indicatorCodeLike.trim(),
     date_start: filters.dateStart,
     date_end: filters.dateEnd,
     enable_value_filter: filters.enableValueFilter,
@@ -170,6 +176,8 @@ export default function App() {
     return {
       indicatorName: "全部",
       indicatorCode: "全部",
+      indicatorNameLike: "",
+      indicatorCodeLike: "",
       dateStart: toDateInput(m.date_min),
       dateEnd: toDateInput(m.date_max),
       enableValueFilter: false,
@@ -441,12 +449,26 @@ export default function App() {
   }
 
   const handleResetClick = async () => {
-    if (!meta) {
+    if (!selectedTableCn) {
       return
     }
-    const next = applyMetaDefaults(meta)
-    setFilters(next)
-    await runQuery(selectedTableCn, next)
+    setIsLoadingMeta(true)
+    setError("")
+    try {
+      const response = await fetch(`/api/filter-meta?table_cn=${encodeURIComponent(selectedTableCn)}`)
+      if (!response.ok) {
+        throw new Error("重置失败：无法获取筛选项")
+      }
+      const data = (await response.json()) as FilterMeta
+      setMeta(data)
+      const next = applyMetaDefaults(data)
+      setFilters(next)
+      await runQuery(selectedTableCn, next)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重置失败")
+    } finally {
+      setIsLoadingMeta(false)
+    }
   }
 
   const handleResetXAxis = () => {
@@ -533,6 +555,12 @@ export default function App() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Input
+                  placeholder="指标名称模糊查询（包含）"
+                  value={filters.indicatorNameLike}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, indicatorNameLike: event.target.value }))}
+                  disabled={isLoadingMeta || !meta}
+                />
               </div>
 
               <div className="space-y-2">
@@ -554,6 +582,12 @@ export default function App() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Input
+                  placeholder="指标代码模糊查询（包含）"
+                  value={filters.indicatorCodeLike}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, indicatorCodeLike: event.target.value }))}
+                  disabled={isLoadingMeta || !meta}
+                />
               </div>
 
               <div className="space-y-2">
@@ -635,23 +669,26 @@ export default function App() {
             </CardHeader>
             <CardContent>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <Select value={selectedTableCn} onValueChange={setSelectedTableCn} disabled={isLoadingTables || tables.length === 0}>
-                  <SelectTrigger className="w-full max-w-xl">
-                    <SelectValue placeholder="选择数据表" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tables.map((table) => (
-                      <SelectItem key={table.cn} value={table.cn}>
-                        {table.cn}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="w-full max-w-xl">
+                  <Label className="mb-1 block text-xs font-medium text-muted-foreground">数据表选择</Label>
+                  <Select value={selectedTableCn} onValueChange={setSelectedTableCn} disabled={isLoadingTables || tables.length === 0}>
+                    <SelectTrigger className="h-11 border-2 border-sky-300 bg-sky-50/70 font-semibold text-slate-800 shadow-sm hover:border-sky-400">
+                      <SelectValue placeholder="请选择数据表（点击展开）" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tables.map((table) => (
+                        <SelectItem key={table.cn} value={table.cn}>
+                          {table.cn}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button variant="outline" onClick={() => void handleExportClick()} disabled={!result || result.row_count === 0}>
                   <Download className="h-4 w-4" /> 导出 CSV
                 </Button>
               </div>
-              <div className="h-[560px] min-h-[420px] max-h-[82vh] resize-y overflow-auto rounded-md border">
+              <div className="relative h-[700px] min-h-[500px] max-h-[88vh] resize-y overflow-auto rounded-md border border-slate-300 bg-white">
                 <Table>
                   <TableHeader>
                     <TableRow>
