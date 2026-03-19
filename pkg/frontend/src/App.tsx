@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AlertTriangle, Download, Filter, LineChart, RefreshCcw, Search } from "lucide-react"
-import Plotly from "plotly.js-dist-min"
+import { ColorType, CrosshairMode, LineSeries, createChart, type IChartApi, type LineData, type Time, type WhitespaceData } from "lightweight-charts"
 
 import { MultiSelect } from "@/components/multi-select"
 import { Button } from "@/components/ui/button"
@@ -73,6 +73,13 @@ const DEFAULT_TABLE_CN = "全量"
 const DEFAULT_LIMIT = 5000
 
 const EMPTY_ROWS: QueryRow[] = []
+const TREND_COLORS = ["#2563eb", "#f97316", "#16a34a", "#dc2626", "#7c3aed", "#0891b2", "#ca8a04", "#db2777"]
+
+interface TrendSeriesConfig {
+  name: string
+  color: string
+  data: Array<LineData<Time> | WhitespaceData<Time>>
+}
 
 const initialFilters: FiltersState = {
   indicatorName: "全部",
@@ -157,6 +164,7 @@ export default function App() {
   const [trendYMax, setTrendYMax] = useState("")
   const [plotLoadError, setPlotLoadError] = useState("")
   const plotContainerRef = useRef<HTMLDivElement | null>(null)
+  const chartApiRef = useRef<IChartApi | null>(null)
 
   const rows = result?.rows ?? EMPTY_ROWS
 
@@ -326,7 +334,7 @@ export default function App() {
     })
   }, [rows, trendIndicators, indicatorNamesInRows, trendStart, trendEnd])
 
-  const chartData = useMemo(() => {
+  const trendSeriesData = useMemo<TrendSeriesConfig[]>(() => {
     const grouped = new Map<string, QueryRow[]>()
 
     trendRows.forEach((row) => {
@@ -336,20 +344,18 @@ export default function App() {
       grouped.get(row.indicator_name)?.push(row)
     })
 
-    return Array.from(grouped.entries()).map(([name, values]) => {
+    return Array.from(grouped.entries()).map(([name, values], index) => {
       const sorted = [...values].sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
       return {
-        x: sorted.map((item) => safeDateLabel(item.datetime)),
-        y: sorted.map((item) => item.value),
-        type: "scatter",
-        mode: "lines+markers",
         name,
-        line: {
-          width: 2,
-        },
-        marker: {
-          size: 6,
-        },
+        color: TREND_COLORS[index % TREND_COLORS.length],
+        data: sorted.map((item) => {
+          const time = safeDateLabel(item.datetime)
+          if (item.value === null || !Number.isFinite(item.value)) {
+            return { time }
+          }
+          return { time, value: item.value }
+        }),
       }
     })
   }, [trendRows])
@@ -362,87 +368,110 @@ export default function App() {
     return { min: Math.min(...vals), max: Math.max(...vals) }
   }, [trendRows])
 
-  const chartLayout = useMemo(() => {
-    const hasManualY = manualYRange && trendYMin !== "" && trendYMax !== ""
-    const yMin = hasManualY ? Number(trendYMin) : undefined
-    const yMax = hasManualY ? Number(trendYMax) : undefined
+  useEffect(() => {
+    const el = plotContainerRef.current
+    if (!el) {
+      return
+    }
 
-    return {
-      autosize: true,
-      height: 620,
-      margin: { l: 60, r: 24, t: 24, b: 60 },
-      paper_bgcolor: "rgba(255,255,255,0)",
-      plot_bgcolor: "rgba(255,255,255,0.85)",
-      hovermode: "x unified",
-      dragmode: "zoom",
-      legend: {
-        orientation: "h",
-        y: 1.1,
-      },
-      xaxis: {
-        title: "日期",
-        type: "date",
-        range: trendStart && trendEnd ? [trendStart, trendEnd] : undefined,
-        rangeslider: {
-          visible: true,
-          thickness: 0.14,
-          bgcolor: "#dce9ff",
-          bordercolor: "#8eb0ff",
-          borderwidth: 1,
+    chartApiRef.current?.remove()
+    chartApiRef.current = null
+    el.innerHTML = ""
+
+    try {
+      const hasManualY = manualYRange && trendYMin !== "" && trendYMax !== ""
+      const yMin = hasManualY ? Number(trendYMin) : null
+      const yMax = hasManualY ? Number(trendYMax) : null
+
+      const chart = createChart(el, {
+        autoSize: true,
+        layout: {
+          background: { type: ColorType.Solid, color: "#ffffff" },
+          textColor: "#475569",
+          fontFamily: "Georgia, 'Noto Serif SC', 'Source Han Serif SC', serif",
+          attributionLogo: true,
         },
-      },
-      yaxis: {
-        title: "值",
-        fixedrange: false,
-        automargin: true,
-        range: hasManualY ? [yMin, yMax] : undefined,
-      },
-    }
-  }, [manualYRange, trendEnd, trendStart, trendYMax, trendYMin])
+        crosshair: {
+          mode: CrosshairMode.Normal,
+          vertLine: {
+            color: "#94a3b8",
+            width: 1,
+            labelBackgroundColor: "#2563eb",
+          },
+          horzLine: {
+            color: "#cbd5e1",
+            width: 1,
+            labelBackgroundColor: "#0f172a",
+          },
+        },
+        grid: {
+          vertLines: { color: "#eef2ff", visible: true, style: 0 },
+          horzLines: { color: "#f1f5f9", visible: true, style: 0 },
+        },
+        rightPriceScale: {
+          borderColor: "#cbd5e1",
+          scaleMargins: { top: 0.15, bottom: 0.12 },
+        },
+        timeScale: {
+          borderColor: "#cbd5e1",
+          barSpacing: 18,
+          minBarSpacing: 6,
+          rightOffset: 2,
+          timeVisible: false,
+        },
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+          horzTouchDrag: true,
+          vertTouchDrag: false,
+        },
+        handleScale: {
+          mouseWheel: true,
+          pinch: true,
+          axisPressedMouseMove: { time: true, price: true },
+          axisDoubleClickReset: { time: true, price: true },
+        },
+      })
 
-  useEffect(() => {
-    let cancelled = false
+      chartApiRef.current = chart
 
-    const renderPlot = async () => {
-      const el = plotContainerRef.current
-      if (!el) {
-        return
+      trendSeriesData.forEach((seriesConfig) => {
+        const series = chart.addSeries(LineSeries, {
+          color: seriesConfig.color,
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          crosshairMarkerVisible: true,
+          crosshairMarkerRadius: 4,
+          autoscaleInfoProvider: hasManualY && yMin !== null && yMax !== null
+            ? () => ({
+                priceRange: {
+                  minValue: yMin,
+                  maxValue: yMax,
+                },
+              })
+            : undefined,
+        })
+        series.setData(seriesConfig.data)
+      })
+
+      if (trendStart && trendEnd) {
+        chart.timeScale().setVisibleRange({ from: trendStart, to: trendEnd })
+      } else {
+        chart.timeScale().fitContent()
       }
 
-      try {
-        await Plotly.react(el, chartData as never[], chartLayout as never, {
-          responsive: true,
-          displaylogo: false,
-          scrollZoom: true,
-          modeBarButtonsToRemove: ["lasso2d", "select2d", "toImage"],
-        } as never)
-
-        if (!cancelled) {
-          setPlotLoadError("")
-        }
-      } catch (err) {
-        console.error("Plotly render failed:", err)
-        if (!cancelled) {
-          setPlotLoadError(err instanceof Error ? err.message : "趋势图渲染失败")
-        }
-      }
+      setPlotLoadError("")
+    } catch (err) {
+      console.error("Lightweight Charts render failed:", err)
+      setPlotLoadError(err instanceof Error ? err.message : "趋势图渲染失败")
     }
-
-    void renderPlot()
 
     return () => {
-      cancelled = true
+      chartApiRef.current?.remove()
+      chartApiRef.current = null
     }
-  }, [chartData, chartLayout])
-
-  useEffect(() => {
-    return () => {
-      const el = plotContainerRef.current
-      if (el) {
-        Plotly.purge(el)
-      }
-    }
-  }, [])
+  }, [manualYRange, trendEnd, trendSeriesData, trendStart, trendYMax, trendYMin])
 
   const handleQueryClick = async () => {
     await runQuery(selectedTableCn, filters)
@@ -477,14 +506,14 @@ export default function App() {
     setTrendStart(minDate)
     setTrendEnd(maxDate)
 
-    const el = plotContainerRef.current
-    if (!el) {
+    const chart = chartApiRef.current
+    if (!chart) {
       return
     }
     if (minDate && maxDate) {
-      void Plotly.relayout(el, { "xaxis.range": [minDate, maxDate] } as never)
+      chart.timeScale().setVisibleRange({ from: minDate, to: maxDate })
     } else {
-      void Plotly.relayout(el, { "xaxis.autorange": true } as never)
+      chart.timeScale().fitContent()
     }
   }
 
@@ -768,7 +797,7 @@ export default function App() {
               <CardTitle className="flex items-center gap-2">
                 <LineChart className="h-5 w-5" /> 趋势图
               </CardTitle>
-              <CardDescription>支持单选/多选指标名称，多条折线同图展示，X/Y 轴都可控</CardDescription>
+              <CardDescription>已切换为 TradingView Lightweight Charts，支持多指标同图、时间缩放和右侧价格轴缩放</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
@@ -857,6 +886,19 @@ export default function App() {
                 >
                   还原 Y 轴
                 </Button>
+              </div>
+
+              <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+                {trendSeriesData.length > 0 ? (
+                  trendSeriesData.map((series) => (
+                    <div key={series.name} className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
+                      <span className="max-w-[220px] truncate">{series.name}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-muted-foreground">请选择至少一个有数据的指标名称来显示趋势图。</div>
+                )}
               </div>
 
               <div className="rounded-xl border bg-white/80 p-2">
