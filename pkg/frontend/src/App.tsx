@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, Download, Filter, LineChart, RefreshCcw, Search } from "lucide-react"
+import { AlertTriangle, ChevronLeft, ChevronRight, Download, Filter, LineChart, RefreshCcw, Search } from "lucide-react"
 import { ColorType, CrosshairMode, LineSeries, createChart, type IChartApi, type LineData, type Time, type WhitespaceData } from "lightweight-charts"
 
 import { MultiSelect } from "@/components/multi-select"
@@ -144,6 +144,26 @@ function pickFilename(disposition: string | null, fallback: string) {
   return fallback
 }
 
+async function readErrorMessage(response: Response, fallback: string) {
+  try {
+    const text = await response.text()
+    if (!text) {
+      return fallback
+    }
+    try {
+      const parsed = JSON.parse(text) as { detail?: string }
+      if (parsed?.detail) {
+        return parsed.detail
+      }
+    } catch {
+      return text
+    }
+    return text
+  } catch {
+    return fallback
+  }
+}
+
 export default function App() {
   const [tables, setTables] = useState<TableOption[]>([])
   const [selectedTableCn, setSelectedTableCn] = useState(DEFAULT_TABLE_CN)
@@ -155,6 +175,7 @@ export default function App() {
   const [isLoadingMeta, setIsLoadingMeta] = useState(false)
   const [isLoadingQuery, setIsLoadingQuery] = useState(false)
   const [error, setError] = useState("")
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
 
   const [trendIndicators, setTrendIndicators] = useState<string[]>([])
   const [trendStart, setTrendStart] = useState("")
@@ -224,7 +245,7 @@ export default function App() {
       try {
         const response = await fetch("/api/tables")
         if (!response.ok) {
-          throw new Error("无法获取数据表")
+          throw new Error(await readErrorMessage(response, "无法获取数据表"))
         }
         const data = (await response.json()) as { tables: TableOption[] }
         setTables(data.tables)
@@ -256,7 +277,7 @@ export default function App() {
       try {
         const response = await fetch(`/api/filter-meta?table_cn=${encodeURIComponent(selectedTableCn)}`)
         if (!response.ok) {
-          throw new Error("无法获取筛选项")
+          throw new Error(await readErrorMessage(response, "无法获取筛选项"))
         }
         const data = (await response.json()) as FilterMeta
         if (cancelled) {
@@ -486,7 +507,7 @@ export default function App() {
     try {
       const response = await fetch(`/api/filter-meta?table_cn=${encodeURIComponent(selectedTableCn)}`)
       if (!response.ok) {
-        throw new Error("重置失败：无法获取筛选项")
+        throw new Error(await readErrorMessage(response, "重置失败：无法获取筛选项"))
       }
       const data = (await response.json()) as FilterMeta
       setMeta(data)
@@ -556,139 +577,164 @@ export default function App() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div
+        className={
+          filtersCollapsed
+            ? "grid grid-cols-1 gap-6 lg:grid-cols-[72px_minmax(0,1fr)]"
+            : "grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]"
+        }
+      >
         <aside>
-          <Card className="sticky top-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" /> 查询条件
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>指标名称</Label>
-                <Select
-                  value={filters.indicatorName}
-                  onValueChange={(value) => setFilters((prev) => ({ ...prev, indicatorName: value }))}
-                  disabled={isLoadingMeta || !meta}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择指标名称" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="全部">全部</SelectItem>
-                    {indicatorNameOptions.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  placeholder="指标名称模糊查询（包含）"
-                  value={filters.indicatorNameLike}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, indicatorNameLike: event.target.value }))}
-                  disabled={isLoadingMeta || !meta}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>指标代码</Label>
-                <Select
-                  value={filters.indicatorCode}
-                  onValueChange={(value) => setFilters((prev) => ({ ...prev, indicatorCode: value }))}
-                  disabled={isLoadingMeta || !meta}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择指标代码" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="全部">全部</SelectItem>
-                    {indicatorCodeOptions.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  placeholder="指标代码模糊查询（包含）"
-                  value={filters.indicatorCodeLike}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, indicatorCodeLike: event.target.value }))}
-                  disabled={isLoadingMeta || !meta}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>日期范围</Label>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                  <Input
-                    type="date"
-                    value={filters.dateStart}
-                    min={toDateInput(meta?.date_min)}
-                    max={toDateInput(meta?.date_max)}
-                    onChange={(event) => setFilters((prev) => ({ ...prev, dateStart: event.target.value }))}
+          {filtersCollapsed ? (
+            <Card className="sticky top-4">
+              <CardContent className="flex min-h-[180px] flex-col items-center justify-start gap-4 px-2 py-4">
+                <Button variant="outline" size="sm" className="h-9 w-9 p-0" onClick={() => setFiltersCollapsed(false)} title="展开查询条件">
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground lg:[writing-mode:vertical-rl] lg:rotate-180">
+                  <Filter className="h-4 w-4 lg:rotate-90" />
+                  <span>查询条件</span>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="sticky top-4">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <Filter className="h-5 w-5" /> 查询条件
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => setFiltersCollapsed(true)} title="隐藏查询条件">
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>指标名称</Label>
+                  <Select
+                    value={filters.indicatorName}
+                    onValueChange={(value) => setFilters((prev) => ({ ...prev, indicatorName: value }))}
                     disabled={isLoadingMeta || !meta}
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择指标名称" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="全部">全部</SelectItem>
+                      {indicatorNameOptions.map((item) => (
+                        <SelectItem key={item} value={item}>
+                          {item}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Input
-                    type="date"
-                    value={filters.dateEnd}
-                    min={toDateInput(meta?.date_min)}
-                    max={toDateInput(meta?.date_max)}
-                    onChange={(event) => setFilters((prev) => ({ ...prev, dateEnd: event.target.value }))}
+                    placeholder="指标名称模糊查询（包含）"
+                    value={filters.indicatorNameLike}
+                    onChange={(event) => setFilters((prev) => ({ ...prev, indicatorNameLike: event.target.value }))}
                     disabled={isLoadingMeta || !meta}
                   />
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="value-filter"
-                    checked={filters.enableValueFilter}
-                    onCheckedChange={(checked) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        enableValueFilter: checked === true,
-                      }))
-                    }
-                  />
-                  <Label htmlFor="value-filter">按数值范围筛选</Label>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label>指标代码</Label>
+                  <Select
+                    value={filters.indicatorCode}
+                    onValueChange={(value) => setFilters((prev) => ({ ...prev, indicatorCode: value }))}
+                    disabled={isLoadingMeta || !meta}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择指标代码" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="全部">全部</SelectItem>
+                      {indicatorCodeOptions.map((item) => (
+                        <SelectItem key={item} value={item}>
+                          {item}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Input
-                    type="number"
-                    value={filters.valueMin}
-                    step="any"
-                    onChange={(event) => setFilters((prev) => ({ ...prev, valueMin: event.target.value }))}
-                    disabled={!filters.enableValueFilter}
-                    placeholder="最小值"
-                  />
-                  <Input
-                    type="number"
-                    value={filters.valueMax}
-                    step="any"
-                    onChange={(event) => setFilters((prev) => ({ ...prev, valueMax: event.target.value }))}
-                    disabled={!filters.enableValueFilter}
-                    placeholder="最大值"
+                    placeholder="指标代码模糊查询（包含）"
+                    value={filters.indicatorCodeLike}
+                    onChange={(event) => setFilters((prev) => ({ ...prev, indicatorCodeLike: event.target.value }))}
+                    disabled={isLoadingMeta || !meta}
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <Button onClick={() => void handleQueryClick()} disabled={isLoadingQuery || isLoadingMeta || isLoadingTables}>
-                  <Search className="h-4 w-4" /> 查询
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => void handleResetClick()}
-                  disabled={isLoadingQuery || isLoadingMeta || !meta}
-                >
-                  <RefreshCcw className="h-4 w-4" /> 重置
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="space-y-2">
+                  <Label>日期范围</Label>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                    <Input
+                      type="date"
+                      value={filters.dateStart}
+                      min={toDateInput(meta?.date_min)}
+                      max={toDateInput(meta?.date_max)}
+                      onChange={(event) => setFilters((prev) => ({ ...prev, dateStart: event.target.value }))}
+                      disabled={isLoadingMeta || !meta}
+                    />
+                    <Input
+                      type="date"
+                      value={filters.dateEnd}
+                      min={toDateInput(meta?.date_min)}
+                      max={toDateInput(meta?.date_max)}
+                      onChange={(event) => setFilters((prev) => ({ ...prev, dateEnd: event.target.value }))}
+                      disabled={isLoadingMeta || !meta}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="value-filter"
+                      checked={filters.enableValueFilter}
+                      onCheckedChange={(checked) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          enableValueFilter: checked === true,
+                        }))
+                      }
+                    />
+                    <Label htmlFor="value-filter">按数值范围筛选</Label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number"
+                      value={filters.valueMin}
+                      step="any"
+                      onChange={(event) => setFilters((prev) => ({ ...prev, valueMin: event.target.value }))}
+                      disabled={!filters.enableValueFilter}
+                      placeholder="最小值"
+                    />
+                    <Input
+                      type="number"
+                      value={filters.valueMax}
+                      step="any"
+                      onChange={(event) => setFilters((prev) => ({ ...prev, valueMax: event.target.value }))}
+                      disabled={!filters.enableValueFilter}
+                      placeholder="最大值"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <Button onClick={() => void handleQueryClick()} disabled={isLoadingQuery || isLoadingMeta || isLoadingTables}>
+                    <Search className="h-4 w-4" /> 查询
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleResetClick()}
+                    disabled={isLoadingQuery || isLoadingMeta || !meta}
+                  >
+                    <RefreshCcw className="h-4 w-4" /> 重置
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </aside>
 
         <main className="space-y-6">

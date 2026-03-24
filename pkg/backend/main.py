@@ -74,16 +74,22 @@ def db_config() -> Dict[str, object]:
 
 def get_connection():
     cfg = db_config()
-    return pymysql.connect(
-        host=cfg["host"],
-        user=cfg["user"],
-        password=cfg["password"],
-        database=cfg["database"],
-        port=int(cfg["port"]),
-        charset="utf8mb4",
-        autocommit=True,
-        cursorclass=pymysql.cursors.DictCursor,
-    )
+    try:
+        return pymysql.connect(
+            host=cfg["host"],
+            user=cfg["user"],
+            password=cfg["password"],
+            database=cfg["database"],
+            port=int(cfg["port"]),
+            charset="utf8mb4",
+            autocommit=True,
+            cursorclass=pymysql.cursors.DictCursor,
+        )
+    except pymysql.MySQLError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"MySQL 连接失败：{cfg['host']}:{cfg['port']}，请确认数据库服务是否可用",
+        ) from exc
 
 
 def fetch_all_tables(conn) -> List[str]:
